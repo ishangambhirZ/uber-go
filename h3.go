@@ -687,3 +687,9 @@ func ringSize(k int) int {
 func rangeSize(k int) int {
 	return int(C.maxKringSize(C.int(k)))
 }
+
+func MaxCompactedPolyfillSize(geoPolygon *GeoPolygon, res int) int {
+	cPolygon := geoPolygon.toCPtr()
+	size := C.maxCompactedPolyfillSize(cPolygon, C.int(res))
+	return int(size)
+}

@@ -927,3 +927,91 @@ void H3_EXPORT(h3SetToLinkedGeo)(const H3Index* h3Set, const int numHexes,
     _vertexGraphToLinkedGeo(&graph, out);
     destroyVertexGraph(&graph);
 }
+
+
+int H3_EXPORT(maxCompactedPolyfillSize)(const GeoPolygon* geoPolygon, int minResolution, int maxResolution) {
+    int totalCount;
+    STACK_ARRAY_CALLOC(BBox, bboxes, geoPolygon->numHoles + 1);
+    bboxesFromGeoPolygon(geoPolygon, bboxes);
+    int minK = bboxHexRadius(&bboxes[0], minResolution);
+    int numHexagons = H3_EXPORT(maxKringSize)(minResolution);
+    GeoCoord center;
+    bboxCenter(&bboxes[0], &center);
+    H3Index centerH3 = H3_EXPORT(geoToH3)(&center, res);
+    maxPSize = H3_EXPORT(maxPolyfillSize)(geoPolygon, minResolution);
+    STACK_ARRAY_CALLOC(H3Index, out, maxPSize);
+    H3_EXPORT(kRing)(centerH3, minK, &out[0]);
+    for (int i = 0; i < numHexagons; i++) {
+        // Skip records that are already zeroed
+        if (out[i] == 0) {
+            continue;
+        }
+
+        //check how many points of hexagon are inside polygon
+        GeoBoundary vertices;
+        H3_EXPORT(h3ToGeoBoundary)(out[i], &vertices);
+        int inVertexCnt = 0;
+        for (int j = 0; j < vertices.numVerts; j++) {
+            vertices[j].lat = constrainLat(vertices[j].lat);
+            vertices[j].lon = constrainLat(vertices[j].lon);
+            if (_pointInPolyContains(geoPolygon, bboxes, &vertices[i])) {
+                inVertexCnt++;
+            }
+        }
+
+        //completely in
+        if (inVertexCnt == vertices.numVerts) {
+            totalCount += 1;
+        } else { //partiallyIn
+            totalCount += checkForNextResolution(out[i], minResolution + 1, maxResolution);
+            //merge out and outNew here
+        }
+    }
+}
+
+
+int checkForNextResolution(const GeoPolygon* geoPolygon, H3Index currIndex, int currentResolution, int maxResolution) {
+    if (currentResolution > maxResolution) {
+        return 0;
+    }
+
+    //allocate memory to out equal to number of chlidren
+    H3Index* children;
+
+    //find children and recursilvely check for next resolution 
+    H3_EXPORT(h3ToChildren)(currIndex, currentResolution, children);
+    int numChildren = H3_EXPORT(maxH3ToChildrenSize)(currIndex, currentResolution);
+    int totalChildrenCount = 0;
+    for (int i = 0; i < numChildren; i++) {    
+        if (currentResolution == maxResolution) {
+            GeoCoord hexCenter;
+            H3_EXPORT(h3ToGeo)(children[i], &hexCenter);
+            int inVertexCnt = 0;
+            hexCenter.lat = constrainLat(hexCenter.lat);
+            hexCenter.lon = constrainLng(hexCenter.lon);
+            if (_pointInPolyContains(geoPolygon, bboxes, &hexCenter)) {
+                totalChildrenCount += 1;
+            }
+            return totalChildrenCount;
+        } else {
+            GeoBoundary vertices;
+            H3_EXPORT(h3ToGeoBoundary)(children[i], &vertices);
+            int inVertexCnt = 0;
+            for (int j = 0; j < vertices.numVerts; j++) {
+                vertices[j].lat = constrainLat(vertices[j].lat);
+                vertices[j].lon = constrainLat(vertices[j].lon);
+                if (_pointInPolyContains(geoPolygon, bboxes, &vertices[i])) {
+                    inVertexCnt++;
+                }
+            }
+
+            //completely in 
+            if (inVertexCnt == vertices.numVerts) {
+                totalChildrenCount += 1;
+            } else { //partiallyIn
+                totalChildrenCount += checkForNextResolution(geoPolygon, out[i], minResolution + 1, maxResolution);
+                //merge children and outNew here
+            }          
+        }
+    }
+}

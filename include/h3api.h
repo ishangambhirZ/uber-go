@@ -439,6 +439,8 @@ void H3_EXPORT(getH3UnidirectionalEdgesFromHexagon)(H3Index origin,
  */
 /** @brief Returns the GeoBoundary containing the coordinates of the edge */
 void H3_EXPORT(getH3UnidirectionalEdgeBoundary)(H3Index edge, GeoBoundary *gb);
+
+int H3_EXPORT(maxCompactedPolyfillSize)(const GeoPolygon* geoPolygon, int minResolution, int maxResolution);
 /** @} */
 
 #ifdef __cplusplus
